@@ -1,14 +1,21 @@
 version: '3.8'
 
 services:
-  csv-analysis-server:
+  csv-analysis-dual-server:
     build: .
-    container_name: csv-analysis-mcp-server
+    container_name: csv-analysis-dual-server
     ports:
-      - "8000:8000"
+      - "8000:8000"  # MCP Server port
+      - "8001:8001"  # HTTP Server port
     environment:
-      - HOST=0.0.0.0
-      - PORT=8000
+      # MCP Server configuration
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - MCP_TRANSPORT=http
+      # HTTP Server configuration
+      - HTTP_HOST=0.0.0.0
+      - HTTP_PORT=8001
+      # General settings
       - PYTHONUNBUFFERED=1
     volumes:
       # Mount local directories for data persistence
@@ -18,10 +25,8 @@ services:
       - ./input:/app/input:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:8000/health && curl -f http://localhost:8001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
-
-  
+      start_period: 45s

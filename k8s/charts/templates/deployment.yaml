@@ -20,7 +20,11 @@ spec:
         - name: {{ .Values.name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           ports:
-            - containerPort: {{ .Values.containerPort }}
+            - name: mcp-port
+              containerPort: {{ .Values.mcpTargetPort }}
+              protocol: TCP
+            - name: http-port
+              containerPort: {{ .Values.httpTargetPort }}
               protocol: TCP
           env:
             {{- range $key, $value := .Values.env }}

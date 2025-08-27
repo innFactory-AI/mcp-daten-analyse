@@ -1,5 +1,5 @@
 name: mcp-daten-analyse
-description: Helm Chart für MCP Daten Analyse Server
+description: Helm Chart für MCP Daten Analyse Dual Server (MCP + HTTP)
 version: 1.0.1
 apiVersion: v2
 keywords:

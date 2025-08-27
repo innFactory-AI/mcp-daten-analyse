@@ -6,8 +6,13 @@ metadata:
     app: {{ .Values.name }}
 spec:
   ports:
-    - name: http
-      port: {{ .Values.containerPort }}
-      targetPort: {{ .Values.targetPort }}
+    - name: mcp-server
+      port: {{ .Values.mcpPort }}
+      targetPort: {{ .Values.mcpTargetPort }}
+      protocol: TCP
+    - name: http-server
+      port: {{ .Values.httpPort }}
+      targetPort: {{ .Values.httpTargetPort }}
+      protocol: TCP
   selector:
     app: {{ .Values.name }}
