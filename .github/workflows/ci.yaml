@@ -42,16 +42,16 @@ jobs:
       version: ${{ needs.version.outputs.version }}
     secrets:
       token: ${{ secrets.GITHUB_TOKEN}}
-  # updateHelmChart:
-  #   name: Update Helm Chart
-  #   needs: version
-  #   uses: innFactory-AI/templates/.github/workflows/update-chart.yaml@main
-  #   permissions: write-all
-  #   with:
-  #     service: 'mcp-daten-analyse'
-  #     version: ${{ needs.version.outputs.version }}
-  #   secrets:
-  #     token: ${{ secrets.GITHUB_TOKEN}}
+  updateHelmChart:
+    name: Update Helm Chart
+    needs: version
+    uses: innFactory-AI/templates/.github/workflows/update-chart.yaml@main
+    permissions: write-all
+    with:
+      service: 'mcp-daten-analyse'
+      version: ${{ needs.version.outputs.version }}
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN}}
   
   # publishHelmChart:
   #   name: Publish Helm Chart
