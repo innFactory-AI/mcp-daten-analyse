@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  csv-analysis-server:
+    build: .
+    container_name: csv-analysis-mcp-server
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Mount local directories for data persistence
+      - ./data:/app/data
+      - ./output:/app/output
+      # Mount for input CSV files
+      - ./input:/app/input:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  

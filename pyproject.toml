@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csv-analysis-mcp-server"
+version = "1.0.0"
+description = "MCP Server for CSV Data Analysis Tools"
+authors = [
+    {name = "CSV Analysis Team"}
+]
+dependencies = [
+    "mcp>=1.0.0",
+]
+requires-python = ">=3.8"
+
+[project.scripts]
+csv-analysis-server = "server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["server*"]
