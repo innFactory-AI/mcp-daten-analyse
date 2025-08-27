@@ -55,7 +55,7 @@ jobs:
   updateHelmChart:
     name: Update Helm Chart
     needs: version
-    uses: rcktsftwr/rocket-ai-ci/.github/workflows/update-chart.yaml@main
+    uses: innFactory-AI/templates/.github/workflows/update-chart.yaml@main
     permissions: write-all
     with:
       service: 'mcp-daten-analyse'
@@ -66,7 +66,7 @@ jobs:
   publishHelmChart:
     name: Publish Helm Chart
     needs: [updateHelmChart, version]
-    uses: rcktsftwr/rocket-ai-ci/.github/workflows/publish-chart.yaml@main
+    uses: innFactory-AI/templates/.github/workflows/publish-chart.yaml@main
     permissions: write-all
     with:
       service: 'mcp-daten-analyse'
