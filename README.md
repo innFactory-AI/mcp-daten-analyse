@@ -4,12 +4,14 @@ A Model Context Protocol (MCP) server that provides tools for analyzing CSV file
 
 ## Overview
 
-This MCP server exposes four tools for processing CSV files that use European number formatting and have a two-row header structure:
+This MCP server exposes six tools for processing CSV files with dataset management:
 
-1. **analyze_csv** - Analyze CSV structure and create TransformSpec
+1. **analyze_csv** - Analyze CSV structure and create named dataset
 2. **transform_csv** - Convert wide format to normalized long format  
 3. **load_sqlite** - Import normalized data into SQLite database
 4. **query_sqlite** - Execute safe SELECT queries on the database
+5. **list_datasets** - List all available datasets and their status
+6. **delete_dataset** - Remove a dataset and all associated files
 
 ## CSV Format Expected
 
@@ -58,40 +60,55 @@ docker run -p 8000:8000 -v $(pwd)/data:/app/data csv-analysis-server
 ## Tools Available
 
 ### analyze_csv
-Analyzes CSV structure with wide headers and returns TransformSpec JSON.
+Analyzes CSV structure with wide headers and creates a named dataset.
 
 **Parameters:**
-- `csv_input` (required): Either path to input CSV file or CSV content as string
-- `is_content` (optional): If true, csv_input is treated as CSV content; if false, as file path (default: false)
+- `csv_input` (required): CSV content as string (or file path if is_content=false)
+- `dataset_name` (required): Name for the dataset (converted to snake_case)
+- `is_content` (optional): If true, csv_input is CSV content; if false, file path (default: true)
 
-**Returns:** JSON string containing the TransformSpec
+**Creates:**
+- `data/{dataset_name}_raw.csv` - Copy of input CSV
+- `data/{dataset_name}_spec.json` - TransformSpec for processing
 
 ### transform_csv
-Transforms wide format CSV to normalized long format using TransformSpec.
+Transforms a dataset from wide format to normalized long format.
 
 **Parameters:**  
-- `csv_input` (required): Either path to CSV file or CSV content as string
-- `spec_input` (required): Either path to TransformSpec JSON file or JSON content as string
-- `is_csv_content` (optional): If true, csv_input is treated as CSV content; if false, as file path (default: false)
-- `is_spec_content` (optional): If true, spec_input is treated as JSON content; if false, as file path (default: false)
-- `output_path` (optional): Output path for normalized file (default: "normalized.csv")
-- `output_json` (optional): Output as JSON instead of CSV (default: false)
+- `dataset_name` (required): Name of the dataset to transform
+
+**Creates:**
+- `data/{dataset_name}_normalized.csv` - Normalized data ready for database loading
 
 ### load_sqlite
-Loads normalized CSV/JSON data into SQLite database.
+Loads a normalized dataset into SQLite database.
 
 **Parameters:**
-- `data_path` (required): Path to normalized CSV or JSON file
-- `db_path` (optional): SQLite database path (default: "data.db")
-- `is_json` (optional): Input file is JSON format (default: false)
+- `dataset_name` (required): Name of the dataset to load
+
+**Creates:**
+- `data/{dataset_name}.db` - SQLite database with factory_data and monthly_values tables
 
 ### query_sqlite
-Executes SELECT queries on SQLite database (read-only for security).
+Executes SELECT queries on a dataset's database (read-only for security).
 
 **Parameters:**
-- `db_path` (required): Path to SQLite database file
+- `dataset_name` (required): Name of the dataset to query
 - `query` (optional): SELECT query to execute
 - `show_schema` (optional): Show database schema instead (default: false)
+
+### list_datasets
+Lists all available datasets and their processing status.
+
+**Returns:** Formatted list showing which files exist for each dataset and their current status.
+
+### delete_dataset
+Removes a dataset and all its associated files.
+
+**Parameters:**
+- `dataset_name` (required): Name of the dataset to delete
+
+**Removes:** All files associated with the dataset (raw CSV, spec, normalized CSV, database)
 
 ## Usage
 
@@ -100,43 +117,83 @@ Executes SELECT queries on SQLite database (read-only for security).
 The server runs over HTTP and can be accessed by MCP clients:
 
 ```python
-# Using the MCP client to call tools:
+# Using the MCP client for dataset management:
 
-# 1. Analyze CSV structure from file
-spec_json = await client.call_tool("analyze_csv", {
-    "csv_input": "input.csv"
-})
+# 1. Start by listing existing datasets
+datasets = await client.call_tool("list_datasets")
 
-# Or analyze CSV content directly
+# 2. Create a new dataset from CSV content (default behavior)
 csv_content = """Factory;1 kum;2 kum;3 kum
 ;2025;2025;2025
 WerkA;1.250.000;2.500.000;3.750.000"""
 
-spec_json = await client.call_tool("analyze_csv", {
+await client.call_tool("analyze_csv", {
     "csv_input": csv_content,
-    "is_content": True
+    "dataset_name": "Factory Production 2025"  # Converted to "factory_production_2025"
 })
 
-# 2. Transform to normalized format using spec JSON directly
+# Or create dataset from CSV file (when file is already on container)
+await client.call_tool("analyze_csv", {
+    "csv_input": "/path/to/input.csv",
+    "dataset_name": "test_data",
+    "is_content": False
+})
+
+# 3. Transform the dataset to normalized format
 await client.call_tool("transform_csv", {
-    "csv_input": "input.csv",
-    "spec_input": spec_json,  # Pass the JSON directly
-    "is_spec_content": True,
-    "output_path": "normalized.csv"
+    "dataset_name": "factory_production_2025"
 })
 
-# 3. Load into database
+# 4. Load into database
 await client.call_tool("load_sqlite", {
-    "data_path": "normalized.csv",
-    "db_path": "analysis.db"
+    "dataset_name": "factory_production_2025"
 })
 
-# 4. Query the data
+# 5. Query the data multiple times (saves tokens!)
 await client.call_tool("query_sqlite", {
-    "db_path": "analysis.db",
+    "dataset_name": "factory_production_2025",
     "query": "SELECT factory, year, SUM(ytd_value) FROM factory_data GROUP BY factory, year"
 })
+
+await client.call_tool("query_sqlite", {
+    "dataset_name": "factory_production_2025", 
+    "query": "SELECT * FROM monthly_values WHERE factory = 'WerkA' ORDER BY year, month"
+})
+
+# 6. Clean up when done
+await client.call_tool("delete_dataset", {
+    "dataset_name": "factory_production_2025"
+})
 ```
+
+## Dataset File Structure
+
+Each dataset creates the following files in the `data/` directory:
+
+```
+data/
+├── {dataset_name}_raw.csv       # Original CSV data
+├── {dataset_name}_spec.json     # Transform specification  
+├── {dataset_name}_normalized.csv # Normalized long-format data
+└── {dataset_name}.db           # SQLite database
+```
+
+## Typical Workflow
+
+1. **Start Session**: `list_datasets()` - See what's available
+2. **Import Data**: `analyze_csv(csv_content, "dataset_name")` - Paste CSV content, create dataset  
+3. **Process Data**: `transform_csv("dataset_name")` - Normalize structure
+4. **Load Database**: `load_sqlite("dataset_name")` - Create queryable database
+5. **Query Multiple Times**: `query_sqlite("dataset_name", "SELECT...")` - Analyze data efficiently
+6. **Clean Up**: `delete_dataset("dataset_name")` - Remove when done
+
+## Key Benefits
+
+- **Easy Import**: Just paste CSV content directly (no file uploads needed)
+- **Token Efficient**: After import, all operations are file-based on the container
+- **Session Persistent**: Create once, query many times without data transfer
+- **Organized**: Clean file structure with snake_case naming
+- **Full Lifecycle**: List → Create → Process → Query → Delete
 
 ### Docker Environment Variables
 

@@ -1,0 +1,10 @@
+name: mcp-daten-analyse
+targetPort: 8000
+containerPort: 8000
+image:
+  repository: ghcr.io/innFactory-AI/mcp-daten-analyse
+  tag: 1.0.0
+env:
+  HOST: 0.0.0.0
+  PORT: 8000
+  PYTHONUNBUFFERED: 1

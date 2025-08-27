@@ -56,28 +56,42 @@ def is_safe_query(query: str) -> bool:
     return True
 
 @mcp.tool
-def analyze_csv(csv_input: str, is_content: bool = False) -> str:
+def analyze_csv(csv_input: str, dataset_name: str, is_content: bool = True) -> str:
     """
-    Analyze CSV structure with wide headers and return TransformSpec JSON.
+    Analyze CSV structure with wide headers and save TransformSpec to file.
     
     Args:
-        csv_input: Either path to CSV file or CSV content as string
-        is_content: If True, csv_input is treated as CSV content; if False, as file path
+        csv_input: Either CSV content as string or path to CSV file
+        dataset_name: Name for the dataset (will be converted to snake_case)
+        is_content: If True, csv_input is treated as CSV content; if False, as file path (default: True)
     
     Returns:
-        JSON string containing the TransformSpec
+        Status message with analysis results and file paths
     """
     try:
+        # Convert dataset name to snake_case
+        dataset_name = re.sub(r'[^a-zA-Z0-9_]', '_', dataset_name.lower())
+        dataset_name = re.sub(r'_+', '_', dataset_name).strip('_')
+        
+        # Create data directory if it doesn't exist
+        os.makedirs('data', exist_ok=True)
+        
         # Handle input based on type
         if is_content:
-            # Parse CSV content directly
-            import io
+            # Parse CSV content directly and save to file for consistency
+            csv_file_path = f'data/{dataset_name}_raw.csv'
+            with open(csv_file_path, 'w', encoding='utf-8') as f:
+                f.write(csv_input)
             csv_data = io.StringIO(csv_input)
             reader = csv.reader(csv_data, delimiter=';')
         else:
             # Read from file path
             if not os.path.exists(csv_input):
                 raise FileNotFoundError(f"CSV file not found: {csv_input}")
+            # Copy to data directory with dataset naming
+            csv_file_path = f'data/{dataset_name}_raw.csv'
+            import shutil
+            shutil.copy2(csv_input, csv_file_path)
             with open(csv_input, 'r', encoding='utf-8') as f:
                 csv_content = f.read()
             csv_data = io.StringIO(csv_content)
@@ -109,114 +123,122 @@ def analyze_csv(csv_input: str, is_content: bool = False) -> str:
             })
         
         spec = {
+            "dataset_name": dataset_name,
+            "csv_file_path": csv_file_path,
             "factory_column": factory_column,
             "factory_column_index": 0,
             "data_columns": columns,
             "delimiter": ";"
         }
         
-        return json.dumps(spec, indent=2)
+        # Save spec to file
+        spec_path = f'data/{dataset_name}_spec.json'
+        with open(spec_path, 'w', encoding='utf-8') as f:
+            json.dump(spec, f, indent=2)
+        
+        return f"CSV analysis complete for dataset '{dataset_name}'\n" + \
+               f"- Raw CSV saved: {csv_file_path}\n" + \
+               f"- TransformSpec saved: {spec_path}\n" + \
+               f"- Found {len(columns)} data columns for factory column '{factory_column}'"
         
     except Exception as e:
         raise Exception(f"Error analyzing CSV: {str(e)}")
 
 @mcp.tool
-def transform_csv(csv_input: str, spec_input: str, is_csv_content: bool = False, is_spec_content: bool = False, output_path: str = "normalized.csv", output_json: bool = False) -> str:
+def transform_csv(dataset_name: str) -> str:
     """
-    Transform wide format CSV to normalized long format using TransformSpec.
+    Transform wide format CSV to normalized long format using existing dataset files.
     
     Args:
-        csv_input: Either path to CSV file or CSV content as string
-        spec_input: Either path to TransformSpec JSON file or JSON content as string
-        is_csv_content: If True, csv_input is treated as CSV content; if False, as file path
-        is_spec_content: If True, spec_input is treated as JSON content; if False, as file path
-        output_path: Path for output normalized file
-        output_json: Output as JSON instead of CSV
+        dataset_name: Name of the dataset to transform (snake_case)
     
     Returns:
         Status message with transformation results
     """
     try:
+        # Convert dataset name to snake_case
+        dataset_name = re.sub(r'[^a-zA-Z0-9_]', '_', dataset_name.lower())
+        dataset_name = re.sub(r'_+', '_', dataset_name).strip('_')
+        
+        # Check if dataset files exist
+        spec_path = f'data/{dataset_name}_spec.json'
+        if not os.path.exists(spec_path):
+            raise FileNotFoundError(f"Dataset '{dataset_name}' not found. Run analyze_csv first.")
+        
         # Load TransformSpec
-        if is_spec_content:
-            spec = json.loads(spec_input)
-        else:
-            if not os.path.exists(spec_input):
-                raise FileNotFoundError(f"TransformSpec file not found: {spec_input}")
-            with open(spec_input, 'r', encoding='utf-8') as f:
-                spec = json.load(f)
+        with open(spec_path, 'r', encoding='utf-8') as f:
+            spec = json.load(f)
         
-        # Handle CSV input
-        if is_csv_content:
-            csv_data = io.StringIO(csv_input)
-            reader = csv.reader(csv_data, delimiter=spec['delimiter'])
-        else:
-            if not os.path.exists(csv_input):
-                raise FileNotFoundError(f"CSV file not found: {csv_input}")
-            with open(csv_input, 'r', encoding='utf-8') as f:
-                csv_content = f.read()
-            csv_data = io.StringIO(csv_content)
-            reader = csv.reader(csv_data, delimiter=spec['delimiter'])
+        csv_path = spec['csv_file_path']
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(f"CSV file not found: {csv_path}")
         
+        # Process CSV
         normalized_data = []
-        
-        # Skip header rows
-        next(reader)
-        next(reader)
-        
-        # Process data rows
-        for row in reader:
-            if not row or not row[0].strip():
-                continue
-                
-            factory = row[spec['factory_column_index']]
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f, delimiter=spec['delimiter'])
             
-            for col_spec in spec['data_columns']:
-                col_idx = col_spec['column_index']
-                if col_idx < len(row):
-                    raw_value = row[col_idx]
-                    ytd_value = parse_european_number(raw_value)
+            # Skip header rows
+            next(reader)
+            next(reader)
+            
+            # Process data rows
+            for row in reader:
+                if not row or not row[0].strip():
+                    continue
                     
-                    normalized_data.append({
-                        'factory': factory,
-                        'year': col_spec['year'],
-                        'month': col_spec['month'], 
-                        'ytd_value': ytd_value
-                    })
+                factory = row[spec['factory_column_index']]
+                
+                for col_spec in spec['data_columns']:
+                    col_idx = col_spec['column_index']
+                    if col_idx < len(row):
+                        raw_value = row[col_idx]
+                        ytd_value = parse_european_number(raw_value)
+                        
+                        normalized_data.append({
+                            'factory': factory,
+                            'year': col_spec['year'],
+                            'month': col_spec['month'], 
+                            'ytd_value': ytd_value
+                        })
         
-        # Write output
-        if output_json:
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(normalized_data, f, indent=2)
-        else:
-            with open(output_path, 'w', encoding='utf-8', newline='') as f:
-                fieldnames = ['factory', 'year', 'month', 'ytd_value']
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(normalized_data)
+        # Write normalized CSV
+        normalized_path = f'data/{dataset_name}_normalized.csv'
+        with open(normalized_path, 'w', encoding='utf-8', newline='') as f:
+            fieldnames = ['factory', 'year', 'month', 'ytd_value']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(normalized_data)
         
-        return f"CSV transformation complete. {len(normalized_data)} records written to {output_path}"
+        return f"Dataset '{dataset_name}' transformation complete\n" + \
+               f"- Normalized data saved: {normalized_path}\n" + \
+               f"- {len(normalized_data)} records processed"
         
     except Exception as e:
-        raise Exception(f"Error transforming CSV: {str(e)}")
+        raise Exception(f"Error transforming dataset: {str(e)}")
 
 @mcp.tool
-def load_sqlite(data_path: str, db_path: str = "data.db", is_json: bool = False) -> str:
+def load_sqlite(dataset_name: str) -> str:
     """
-    Load normalized CSV/JSON data into SQLite database.
+    Load normalized dataset into SQLite database.
     
     Args:
-        data_path: Path to normalized CSV or JSON file
-        db_path: SQLite database path
-        is_json: Input file is JSON format
+        dataset_name: Name of the dataset to load into database
     
     Returns:
         Status message with load results
     """
     try:
-        if not os.path.exists(data_path):
-            raise FileNotFoundError(f"Data file not found: {data_path}")
-            
+        # Convert dataset name to snake_case
+        dataset_name = re.sub(r'[^a-zA-Z0-9_]', '_', dataset_name.lower())
+        dataset_name = re.sub(r'_+', '_', dataset_name).strip('_')
+        
+        # Check if normalized CSV exists
+        normalized_path = f'data/{dataset_name}_normalized.csv'
+        if not os.path.exists(normalized_path):
+            raise FileNotFoundError(f"Normalized dataset '{dataset_name}' not found. Run transform_csv first.")
+        
+        db_path = f'data/{dataset_name}.db'
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
@@ -235,26 +257,16 @@ def load_sqlite(data_path: str, db_path: str = "data.db", is_json: bool = False)
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_factory ON factory_data(factory)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_year_month ON factory_data(year, month)')
         
-        # Load data
-        if is_json:
-            with open(data_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+        # Load data from normalized CSV
+        with open(normalized_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
             
-            for record in data:
+            for row in reader:
+                ytd_value = float(row['ytd_value']) if row['ytd_value'] else None
                 cursor.execute('''
                     INSERT OR REPLACE INTO factory_data (factory, year, month, ytd_value)
                     VALUES (?, ?, ?, ?)
-                ''', (record['factory'], record['year'], record['month'], record['ytd_value']))
-        else:
-            with open(data_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                
-                for row in reader:
-                    ytd_value = float(row['ytd_value']) if row['ytd_value'] else None
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO factory_data (factory, year, month, ytd_value)
-                        VALUES (?, ?, ?, ?)
-                    ''', (row['factory'], int(row['year']), int(row['month']), ytd_value))
+                ''', (row['factory'], int(row['year']), int(row['month']), ytd_value))
         
         # Create derived table
         cursor.execute('DROP TABLE IF EXISTS monthly_values')
@@ -288,18 +300,21 @@ def load_sqlite(data_path: str, db_path: str = "data.db", is_json: bool = False)
         
         conn.close()
         
-        return f"Data loaded successfully into {db_path}\nRecords: {count}, Factories: {factories}\nTables created: factory_data, monthly_values"
+        return f"Dataset '{dataset_name}' loaded successfully into database\n" + \
+               f"- Database: {db_path}\n" + \
+               f"- Records: {count}, Factories: {factories}\n" + \
+               f"- Tables created: factory_data, monthly_values"
         
     except Exception as e:
-        raise Exception(f"Error loading data: {str(e)}")
+        raise Exception(f"Error loading dataset: {str(e)}")
 
 @mcp.tool
-def query_sqlite(db_path: str, query: str = "", show_schema: bool = False) -> str:
+def query_sqlite(dataset_name: str, query: str = "", show_schema: bool = False) -> str:
     """
-    Execute SELECT queries on SQLite database (read-only).
+    Execute SELECT queries on dataset's SQLite database (read-only).
     
     Args:
-        db_path: Path to SQLite database file
+        dataset_name: Name of the dataset to query
         query: SELECT query to execute
         show_schema: Show database schema instead of running query
     
@@ -307,15 +322,20 @@ def query_sqlite(db_path: str, query: str = "", show_schema: bool = False) -> st
         Query results or schema information
     """
     try:
+        # Convert dataset name to snake_case
+        dataset_name = re.sub(r'[^a-zA-Z0-9_]', '_', dataset_name.lower())
+        dataset_name = re.sub(r'_+', '_', dataset_name).strip('_')
+        
+        db_path = f'data/{dataset_name}.db'
         if not os.path.exists(db_path):
-            raise FileNotFoundError(f"Database file not found: {db_path}")
+            raise FileNotFoundError(f"Database for dataset '{dataset_name}' not found. Run load_sqlite first.")
             
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
         if show_schema or not query:
             # Show schema
-            result_text = "Database Schema:\n================\n"
+            result_text = f"Database Schema for dataset '{dataset_name}':\n" + "="*50 + "\n"
             
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = cursor.fetchall()
@@ -367,7 +387,123 @@ def query_sqlite(db_path: str, query: str = "", show_schema: bool = False) -> st
         return result_text
         
     except Exception as e:
-        raise Exception(f"Error querying database: {str(e)}")
+        raise Exception(f"Error querying dataset: {str(e)}")
+
+@mcp.tool
+def list_datasets() -> str:
+    """
+    List all available datasets and their status.
+    
+    Returns:
+        Formatted list of datasets with their files and database status
+    """
+    try:
+        # Create data directory if it doesn't exist
+        os.makedirs('data', exist_ok=True)
+        
+        # Find all spec files to identify datasets
+        datasets = {}
+        for filename in os.listdir('data'):
+            if filename.endswith('_spec.json'):
+                dataset_name = filename.replace('_spec.json', '')
+                datasets[dataset_name] = {
+                    'spec': f'data/{filename}',
+                    'raw_csv': f'data/{dataset_name}_raw.csv',
+                    'normalized_csv': f'data/{dataset_name}_normalized.csv',
+                    'database': f'data/{dataset_name}.db'
+                }
+        
+        if not datasets:
+            return "No datasets found. Use analyze_csv to create a dataset."
+        
+        result = "Available Datasets:\n" + "="*50 + "\n"
+        
+        for name, files in datasets.items():
+            result += f"\nDataset: {name}\n"
+            
+            # Check file existence
+            spec_exists = os.path.exists(files['spec'])
+            raw_exists = os.path.exists(files['raw_csv'])
+            normalized_exists = os.path.exists(files['normalized_csv'])
+            db_exists = os.path.exists(files['database'])
+            
+            result += f"  ✓ Spec file: {files['spec']}\n" if spec_exists else f"  ✗ Spec file: {files['spec']}\n"
+            result += f"  ✓ Raw CSV: {files['raw_csv']}\n" if raw_exists else f"  ✗ Raw CSV: {files['raw_csv']}\n"
+            result += f"  ✓ Normalized CSV: {files['normalized_csv']}\n" if normalized_exists else f"  ✗ Normalized CSV: {files['normalized_csv']}\n"
+            result += f"  ✓ Database: {files['database']}\n" if db_exists else f"  ✗ Database: {files['database']}\n"
+            
+            # Show status
+            if spec_exists and raw_exists and normalized_exists and db_exists:
+                status = "Ready for querying"
+            elif spec_exists and raw_exists and normalized_exists:
+                status = "Ready for database load"
+            elif spec_exists and raw_exists:
+                status = "Ready for transformation"
+            elif spec_exists:
+                status = "Analyzed (missing raw CSV)"
+            else:
+                status = "Incomplete"
+            
+            result += f"  Status: {status}\n"
+        
+        return result
+        
+    except Exception as e:
+        raise Exception(f"Error listing datasets: {str(e)}")
+
+@mcp.tool
+def delete_dataset(dataset_name: str) -> str:
+    """
+    Delete all files associated with a dataset.
+    
+    Args:
+        dataset_name: Name of the dataset to delete
+    
+    Returns:
+        Status message with deleted files
+    """
+    try:
+        # Convert dataset name to snake_case
+        dataset_name = re.sub(r'[^a-zA-Z0-9_]', '_', dataset_name.lower())
+        dataset_name = re.sub(r'_+', '_', dataset_name).strip('_')
+        
+        # Define all possible files for the dataset
+        files_to_delete = [
+            f'data/{dataset_name}_spec.json',
+            f'data/{dataset_name}_raw.csv',
+            f'data/{dataset_name}_normalized.csv',
+            f'data/{dataset_name}.db'
+        ]
+        
+        deleted_files = []
+        missing_files = []
+        
+        for file_path in files_to_delete:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                deleted_files.append(file_path)
+            else:
+                missing_files.append(file_path)
+        
+        if not deleted_files and not missing_files:
+            return f"Dataset '{dataset_name}' not found."
+        
+        result = f"Dataset '{dataset_name}' deletion complete\n"
+        
+        if deleted_files:
+            result += f"Deleted files ({len(deleted_files)}):\n"
+            for file_path in deleted_files:
+                result += f"  - {file_path}\n"
+        
+        if missing_files:
+            result += f"Files not found ({len(missing_files)}):\n"
+            for file_path in missing_files:
+                result += f"  - {file_path}\n"
+        
+        return result
+        
+    except Exception as e:
+        raise Exception(f"Error deleting dataset: {str(e)}")
 
 if __name__ == "__main__":
     # Get configuration from environment variables
