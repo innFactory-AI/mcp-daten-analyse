@@ -8,3 +8,6 @@ env:
   HOST: 0.0.0.0
   PORT: 8000
   PYTHONUNBUFFERED: 1
+mcp-daten-analyse:
+  image:
+    tag: 1.0.1
