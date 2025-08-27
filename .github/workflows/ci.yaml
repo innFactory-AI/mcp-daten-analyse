@@ -12,13 +12,6 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  build:
-    name: Build and Test
-    uses: innFactory-AI/templates/.github/workflows/build-only.yaml@main
-    permissions: write-all
-    secrets:
-      token: ${{ secrets.GITHUB_TOKEN}}
-  
   version:
     name: Create Version
     runs-on: ubuntu-latest
@@ -41,6 +34,16 @@ jobs:
           update-file: package.json
           changelog-generator-opt: 'emojis=true'
 
+  build:
+    name: Build
+    uses: innFactory-AI/templates/.github/workflows/build-only.yaml@main
+    permissions: write-all
+    with:
+      service: 'mcp-daten-analyse'
+      version: ${{ needs.version.outputs.version }}
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN}}
+  
   deploy:
     name: Build Docker image
     needs: version
