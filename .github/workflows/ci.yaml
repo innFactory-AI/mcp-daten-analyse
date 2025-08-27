@@ -33,7 +33,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           update-file: package.json
           changelog-generator-opt: 'emojis=true'
-
   build:
     name: Build
     uses: innFactory-AI/templates/.github/workflows/build-only.yaml@main
