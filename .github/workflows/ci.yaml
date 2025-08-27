@@ -42,7 +42,6 @@ jobs:
       version: ${{ needs.version.outputs.version }}
     secrets:
       token: ${{ secrets.GITHUB_TOKEN}}
-  
   updateHelmChart:
     name: Update Helm Chart
     needs: version
