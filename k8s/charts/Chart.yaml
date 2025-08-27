@@ -1,6 +1,6 @@
 name: mcp-daten-analyse
 description: Helm Chart für MCP Daten Analyse Server
-version: 1.0.0
+version: 1.0.1
 apiVersion: v2
 keywords:
   - docker-compose
