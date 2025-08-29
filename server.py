@@ -42,7 +42,7 @@ def is_safe_query(query: str) -> bool:
 
 
 @mcp.tool
-def query_sqlite(dataset_name: str, query: str = "", show_schema: bool = False) -> str:
+def query_dataset(dataset_name: str, query: str = "", show_schema: bool = False) -> str:
     """
     Execute SELECT queries on dataset's SQLite database (read-only).
     
