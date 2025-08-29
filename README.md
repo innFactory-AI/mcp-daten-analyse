@@ -2,6 +2,12 @@
 
 A Model Context Protocol (MCP) server that provides tools for analyzing CSV files with wide-format headers and converting them to normalized SQLite databases.
 
+## Deploy
+
+```bash
+helm upgrade --install mcp-daten-analyse ./k8s/charts --namespace mcp --values ./k8s/charts/values.yaml --kube-context aks-innfactoryai-prod
+```
+
 ## Overview
 
 This MCP server exposes six tools for processing CSV files with dataset management:

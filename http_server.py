@@ -203,19 +203,19 @@ def transform_csv():
                     col_idx = col_spec['column_index']
                     if col_idx < len(row):
                         raw_value = row[col_idx]
-                        ytd_value = parse_european_number(raw_value)
+                        monthly_value = parse_european_number(raw_value)
                         
                         normalized_data.append({
                             'factory': factory,
                             'year': col_spec['year'],
                             'month': col_spec['month'], 
-                            'ytd_value': ytd_value
+                            'monthly_value': monthly_value
                         })
         
         # Write normalized CSV
         normalized_path = f'data/{dataset_name}_normalized.csv'
         with open(normalized_path, 'w', encoding='utf-8', newline='') as f:
-            fieldnames = ['factory', 'year', 'month', 'ytd_value']
+            fieldnames = ['factory', 'year', 'month', 'monthly_value']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(normalized_data)
@@ -273,7 +273,7 @@ def load_sqlite():
                 factory TEXT NOT NULL,
                 year INTEGER,
                 month INTEGER,
-                ytd_value REAL,
+                monthly_value REAL,
                 PRIMARY KEY (factory, year, month)
             )
         ''')
@@ -287,32 +287,32 @@ def load_sqlite():
             reader = csv.DictReader(f)
             
             for row in reader:
-                ytd_value = float(row['ytd_value']) if row['ytd_value'] else None
+                monthly_value = float(row['monthly_value']) if row['monthly_value'] else None
                 cursor.execute('''
-                    INSERT OR REPLACE INTO factory_data (factory, year, month, ytd_value)
+                    INSERT OR REPLACE INTO factory_data (factory, year, month, monthly_value)
                     VALUES (?, ?, ?, ?)
-                ''', (row['factory'], int(row['year']), int(row['month']), ytd_value))
-        
-        # Create derived table
-        cursor.execute('DROP TABLE IF EXISTS monthly_values')
-        cursor.execute('''
-            CREATE TABLE monthly_values AS
-            SELECT 
-                f1.factory,
-                f1.year,
-                f1.month,
-                f1.ytd_value,
-                CASE 
-                    WHEN f1.month = 1 THEN f1.ytd_value
-                    ELSE f1.ytd_value - COALESCE(f2.ytd_value, 0)
-                END as month_value
-            FROM factory_data f1
-            LEFT JOIN factory_data f2 ON 
-                f1.factory = f2.factory AND 
-                f1.year = f2.year AND 
-                f1.month = f2.month + 1
-            ORDER BY f1.factory, f1.year, f1.month
-        ''')
+                ''', (row['factory'], int(row['year']), int(row['month']), monthly_value))
+
+        # # Create derived table
+        # cursor.execute('DROP TABLE IF EXISTS monthly_values')
+        # cursor.execute('''
+        #     CREATE TABLE monthly_values AS
+        #     SELECT 
+        #         f1.factory,
+        #         f1.year,
+        #         f1.month,
+        #         f1.ytd_value,
+        #         CASE 
+        #             WHEN f1.month = 1 THEN f1.ytd_value
+        #             ELSE f1.ytd_value - COALESCE(f2.ytd_value, 0)
+        #         END as month_value
+        #     FROM factory_data f1
+        #     LEFT JOIN factory_data f2 ON 
+        #         f1.factory = f2.factory AND 
+        #         f1.year = f2.year AND 
+        #         f1.month = f2.month + 1
+        #     ORDER BY f1.factory, f1.year, f1.month
+        # ''')
         
         conn.commit()
         
@@ -332,7 +332,7 @@ def load_sqlite():
             "database_path": db_path,
             "records_loaded": count,
             "factories_count": factories,
-            "tables_created": ["factory_data", "monthly_values"]
+            "tables_created": ["factory_data"]
         })
         
     except Exception as e:

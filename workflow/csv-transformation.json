@@ -1,0 +1,175 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://mcp-daten-analyse.mcp:8001/analyze-csv",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        -80
+      ],
+      "id": "a1ee4cb3-ac6f-4ed6-a785-206315793c05",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "formTitle": "file upload",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "file",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".csv"
+            },
+            {
+              "fieldLabel": "Dataset Name"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -480,
+        -80
+      ],
+      "id": "8e9a7c01-a186-439a-b9d2-9417b4b352d0",
+      "name": "On form submission",
+      "webhookId": "7136b4dc-6316-4f63-9a83-023402a37469"
+    },
+    {
+      "parameters": {
+        "operation": "binaryToPropery",
+        "binaryPropertyName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        -80
+      ],
+      "id": "9d7f826a-ed32-4f81-bfb2-90dd1d1b8650",
+      "name": "Extract from File1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const csvBuffer = Buffer.from($input.first().json.data, 'base64');\nconst csvString = csvBuffer.toString('utf8');\nconst name = $('On form submission').first().json[\"Dataset Name\"]\n\nconst formattedName = name.replace(\" \", \"_\")\n\nreturn {\n      csv_input: csvString,\n      dataset_name: formattedName.toLowerCase(),\n      is_content: true \n  }\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        -80
+      ],
+      "id": "5e93db94-1905-419b-8e4b-74e5625e3a83",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://mcp-daten-analyse.mcp:8001/transform-csv",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"dataset_name\": \"{{ $json.dataset_name }}\"\n} ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        416,
+        -80
+      ],
+      "id": "c10cc021-75eb-405a-a40c-e7569ac7e4ad",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://mcp-daten-analyse.mcp:8001/load-sqlite",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"dataset_name\": \"{{ $json.dataset_name }}\"\n} ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        -80
+      ],
+      "id": "706509a9-6e8e-4970-a478-126353e1228b",
+      "name": "HTTP Request2"
+    }
+  ],
+  "connections": {
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Extract from File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "c1c8469986f58ebd924f14ba9d906e06945522498f80983b80a6b52d2f49689f"
+  }
+}
