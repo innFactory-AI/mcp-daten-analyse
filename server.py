@@ -3,7 +3,7 @@
 FastMCP Server for CSV Data Analysis Query Tools
 
 Exposes three MCP tools:
-1. query_sqlite - Execute SELECT queries on SQLite database
+1. query_dataset - Execute SELECT queries on SQLite database
 2. list_datasets - List all available datasets and their status
 3. delete_dataset - Delete all files associated with a dataset
 """
