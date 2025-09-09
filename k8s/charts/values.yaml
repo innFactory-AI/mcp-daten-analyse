@@ -7,7 +7,7 @@ httpPort: 8001
 httpTargetPort: 8001
 image:
   repository: ghcr.io/innfactory-ai/mcp-daten-analyse
-  tag: 1.1.1
+  tag: 1.2.0
 env:
   # MCP Server configuration
   MCP_HOST: 0.0.0.0
